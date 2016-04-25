@@ -223,7 +223,9 @@ module Bigcommerce
     end
 
     def orders(options={})
-      @connection.get("/orders", options)
+      require 'bigcommerce/order'
+      options['resource_class'] = Order
+      collection("/orders", options)
     end
 
     def orders_by_date(date, options={})
@@ -257,8 +259,8 @@ module Bigcommerce
       @connection.get("/orders/#{order_id}/coupons/#{coupon_id}", options)
     end
 
-    def orders_products(id,options={})
-      @connection.get("/orders/#{id}/products", options)
+    def orders_products(order_id,options={})
+      collection("/orders/#{order_id}/products", options)
     end
 
     def orders_product(order_id,product_id,options={})
@@ -298,7 +300,9 @@ module Bigcommerce
     end
 
     def products(options={})
-      @connection.get("/products", options)
+      require 'bigcommerce/product'
+      options['resource_class'] = Product
+      collection("/products", options)
     end
 
     def products_count(options={})
@@ -451,6 +455,7 @@ module Bigcommerce
       else
         klass = Resource
       end
+      options[:filters] ||= {}
       Enumerator.new do |yielder|
         count = -1
         if options[:starting_page]
@@ -459,7 +464,7 @@ module Bigcommerce
           @page = 1
         end
         until count == 0
-          buffer = @connection.get(resource_path, {page: page})
+          buffer = @connection.get(resource_path, {page: page}.merge(options[:filters]))
           count = buffer.count
           buffer.each do |item|
             yielder << klass.new(item, @connection)
