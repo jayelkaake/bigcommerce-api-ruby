@@ -10,6 +10,12 @@ module Bigcommerce
       @connection = Connection.new(configuration)
     end
 
+    ##
+    # @param [Boolean] enable/disable debug mode which will output helpful debug information.
+    def debug_mode=(val)
+      @debug_mode = val
+    end
+
     def connection
       @connection
     end
@@ -449,34 +455,56 @@ module Bigcommerce
       result["count"]
     end
 
+
     def collection(resource_path, options={})
-      if (options["resource_class"])
+      start_time = Time.current
+
+      if options["resource_class"]
         klass = options["resource_class"]
       else
         klass = Resource
       end
       options[:filters] ||= {}
-      Enumerator.new do |yielder|
+
+      enum = Enumerator.new do |yielder|
         count = -1
         if options[:starting_page]
           @page = options[:starting_page]
         else
           @page = 1
         end
+
         until count == 0
+          debug "Making call #{resource_path} with params #{{page: page}.merge(options[:filters]).inspect}"
+
           buffer = @connection.get(resource_path, {page: page}.merge(options[:filters]))
+
           count = buffer.count
           buffer.each do |item|
             yielder << klass.new(item, @connection)
-            p @connection.remaining_rate_limit
+            debug "Remaining rate limit is #{@connection.remaining_rate_limit}"
           end
           @page += 1
+
+          ## If we are using a limit filter and the result count was less than our limit, then there is no sense
+          # in checking for more products, so just break.
+          break if options[:filters][:limit].present? && count < options[:filters][:limit]
         end
       end
+
+      debug "Completed #{resource_path} data fetch in #{Time.current-start_time}ms"
+
+      enum
     end
 
     def resource(result)
       result
+    end
+
+    private
+
+    def debug(msg)
+      puts "[bigcommerce_api]: #{msg}" if @debug_mode
     end
   end
 end
